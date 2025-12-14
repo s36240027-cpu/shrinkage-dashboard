@@ -4,7 +4,6 @@ import pandas as pd
 import matplotlib.pyplot as plt
 
 from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import StandardScaler
 from sklearn.ensemble import GradientBoostingClassifier
 from sklearn.metrics import recall_score, confusion_matrix
 
@@ -26,13 +25,13 @@ df = load_data()
 df["date"] = pd.to_datetime(df["date"])
 
 # ======================
-# PREPROCESSING
+# PREPROCESSING (MATCH NOTEBOOK)
 # ======================
 
-# Create label (threshold = 400)
+# Create label (fixed threshold)
 df["High_Risk"] = (df["shrinkage"] > 400).astype(int)
 
-# One-Hot Encoding categorical features
+# One-hot encoding categorical features
 cat_cols = ["store_id", "department"]
 df_ohe = pd.get_dummies(df[cat_cols], prefix=cat_cols)
 
@@ -41,10 +40,8 @@ df_final = pd.concat(
     axis=1
 )
 
-# Feature & target split
-X = df_final.drop(
-    columns=["shrinkage", "date", "High_Risk"]
-)
+# Feature & target
+X = df_final.drop(columns=["shrinkage", "date", "High_Risk"])
 y = df_final["High_Risk"]
 
 # ======================
@@ -105,11 +102,10 @@ with colB:
     st.pyplot(fig)
 
 # ======================
-# MODEL
+# MODEL (NO SCALING – CORRECT)
 # ======================
 st.subheader("🤖 Shrinkage Risk Classification")
 
-# Train-test split
 X_train, X_test, y_train, y_test = train_test_split(
     X, y,
     test_size=0.3,
@@ -117,12 +113,6 @@ X_train, X_test, y_train, y_test = train_test_split(
     stratify=y
 )
 
-# Scaling
-scaler = StandardScaler()
-X_train_scaled = scaler.fit_transform(X_train)
-X_test_scaled = scaler.transform(X_test)
-
-# Gradient Boosting Classifier
 model = GradientBoostingClassifier(
     n_estimators=200,
     learning_rate=0.05,
@@ -130,14 +120,14 @@ model = GradientBoostingClassifier(
     random_state=42
 )
 
-model.fit(X_train_scaled, y_train)
+model.fit(X_train, y_train)
 
 # ======================
-# EVALUATION
+# EVALUATION (OPTION C)
 # ======================
 threshold = 0.37
 
-proba = model.predict_proba(X_test_scaled)[:, 1]
+proba = model.predict_proba(X_test)[:, 1]
 preds = (proba >= threshold).astype(int)
 
 recall = recall_score(y_test, preds)
@@ -157,11 +147,10 @@ st.dataframe(
 )
 
 # ======================
-# PREDICTION INPUT
+# PREDICTION INPUT (FIXED)
 # ======================
 st.subheader("🧪 Try Risk Prediction")
 
-# Numeric inputs
 c1, c2, c3 = st.columns(3)
 sales = c1.number_input("Sales", min_value=0)
 returns = c2.number_input("Returns", min_value=0)
@@ -170,7 +159,6 @@ inventory = c3.number_input("Inventory", min_value=0)
 promo = st.selectbox("Promo Active?", [0, 1])
 staff = st.slider("Staff on Duty", 1, 20, 5)
 
-# 🔑 CATEGORICAL INPUT (WAJIB)
 store_input = st.selectbox(
     "Store ID",
     sorted(df["store_id"].unique())
@@ -182,7 +170,6 @@ department_input = st.selectbox(
 )
 
 if st.button("Predict Risk"):
-    # 1️⃣ Buat dataframe input mentah
     input_df = pd.DataFrame([{
         "sales": sales,
         "returns": returns,
@@ -193,7 +180,6 @@ if st.button("Predict Risk"):
         "department": department_input
     }])
 
-    # 2️⃣ One-hot encoding input (SAMA seperti training)
     input_ohe = pd.get_dummies(
         input_df[["store_id", "department"]],
         prefix=["store_id", "department"]
@@ -204,19 +190,13 @@ if st.button("Predict Risk"):
         axis=1
     )
 
-    # 3️⃣ Samakan kolom dengan X training
     input_final = input_final.reindex(
         columns=X.columns,
         fill_value=0
     )
 
-    # 4️⃣ Scaling
-    input_scaled = scaler.transform(input_final)
+    proba_input = model.predict_proba(input_final)[0, 1]
 
-    # 5️⃣ Predict probability
-    proba_input = model.predict_proba(input_scaled)[0, 1]
-
-    # 6️⃣ Threshold decision
     if proba_input >= threshold:
         st.error(f"🚨 HIGH SHRINKAGE RISK (prob={proba_input:.2f})")
     else:

@@ -45,27 +45,6 @@ X = df_final.drop(columns=["shrinkage", "date", "High_Risk"])
 y = df_final["High_Risk"]
 
 # ======================
-# SIDEBAR FILTER (EDA ONLY)
-# ======================
-st.sidebar.header("🔍 Filter Data")
-
-store = st.sidebar.selectbox(
-    "Select Store",
-    ["All"] + sorted(df["store_id"].unique())
-)
-
-department = st.sidebar.selectbox(
-    "Select Department",
-    ["All"] + sorted(df["department"].unique())
-)
-
-filtered_df = df.copy()
-if store != "All":
-    filtered_df = filtered_df[filtered_df["store_id"] == store]
-if department != "All":
-    filtered_df = filtered_df[filtered_df["department"] == department]
-
-# ======================
 # KPI
 # ======================
 st.subheader("📊 Key Metrics")

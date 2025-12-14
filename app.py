@@ -161,6 +161,7 @@ st.dataframe(
 # ======================
 st.subheader("🧪 Try Risk Prediction")
 
+# Numeric inputs
 c1, c2, c3 = st.columns(3)
 sales = c1.number_input("Sales", min_value=0)
 returns = c2.number_input("Returns", min_value=0)
@@ -169,20 +170,53 @@ inventory = c3.number_input("Inventory", min_value=0)
 promo = st.selectbox("Promo Active?", [0, 1])
 staff = st.slider("Staff on Duty", 1, 20, 5)
 
+# 🔑 CATEGORICAL INPUT (WAJIB)
+store_input = st.selectbox(
+    "Store ID",
+    sorted(df["store_id"].unique())
+)
+
+department_input = st.selectbox(
+    "Department",
+    sorted(df["department"].unique())
+)
+
 if st.button("Predict Risk"):
+    # 1️⃣ Buat dataframe input mentah
     input_df = pd.DataFrame([{
         "sales": sales,
         "returns": returns,
         "inventory": inventory,
         "promo": promo,
-        "staff_on_duty": staff
+        "staff_on_duty": staff,
+        "store_id": store_input,
+        "department": department_input
     }])
 
-    input_df = input_df.reindex(columns=X.columns, fill_value=0)
-    input_scaled = scaler.transform(input_df)
+    # 2️⃣ One-hot encoding input (SAMA seperti training)
+    input_ohe = pd.get_dummies(
+        input_df[["store_id", "department"]],
+        prefix=["store_id", "department"]
+    )
 
+    input_final = pd.concat(
+        [input_df.drop(columns=["store_id", "department"]), input_ohe],
+        axis=1
+    )
+
+    # 3️⃣ Samakan kolom dengan X training
+    input_final = input_final.reindex(
+        columns=X.columns,
+        fill_value=0
+    )
+
+    # 4️⃣ Scaling
+    input_scaled = scaler.transform(input_final)
+
+    # 5️⃣ Predict probability
     proba_input = model.predict_proba(input_scaled)[0, 1]
 
+    # 6️⃣ Threshold decision
     if proba_input >= threshold:
         st.error(f"🚨 HIGH SHRINKAGE RISK (prob={proba_input:.2f})")
     else:

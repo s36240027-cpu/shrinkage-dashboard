@@ -1,5 +1,5 @@
-streamlit
-pandas
-matplotlib
-scikit-learn
-imbalanced-learn
+streamlit==1.39.0
+pandas==2.2.2
+matplotlib==3.9.2
+scikit-learn==1.4.2
+imbalanced-learn==0.12.3

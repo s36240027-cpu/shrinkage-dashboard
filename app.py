@@ -4,7 +4,6 @@ import pandas as pd
 import matplotlib.pyplot as plt
 
 from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import StandardScaler
 from sklearn.ensemble import GradientBoostingClassifier
 from sklearn.metrics import recall_score, confusion_matrix
 
@@ -26,13 +25,13 @@ df = load_data()
 df["date"] = pd.to_datetime(df["date"])
 
 # ======================
-# PREPROCESSING
+# PREPROCESSING (MATCH NOTEBOOK)
 # ======================
 
-# Create label (threshold = 400)
+# Create label (fixed threshold)
 df["High_Risk"] = (df["shrinkage"] > 400).astype(int)
 
-# One-Hot Encoding categorical features
+# One-hot encoding categorical features
 cat_cols = ["store_id", "department"]
 df_ohe = pd.get_dummies(df[cat_cols], prefix=cat_cols)
 
@@ -41,14 +40,12 @@ df_final = pd.concat(
     axis=1
 )
 
-# Feature & target split (sesuai notebook)
-X = df_final.drop(
-    columns=["shrinkage", "date", "High_Risk"]
-)
+# Feature & target
+X = df_final.drop(columns=["shrinkage", "date", "High_Risk"])
 y = df_final["High_Risk"]
 
 # ======================
-# SIDEBAR FILTER (EDA SAJA)
+# SIDEBAR FILTER (EDA ONLY)
 # ======================
 st.sidebar.header("🔍 Filter Data")
 
@@ -105,11 +102,10 @@ with colB:
     st.pyplot(fig)
 
 # ======================
-# MODEL
+# MODEL (NO SCALING – CORRECT)
 # ======================
 st.subheader("🤖 Shrinkage Risk Classification")
 
-# Train-test split (test_size = 0.3)
 X_train, X_test, y_train, y_test = train_test_split(
     X, y,
     test_size=0.3,
@@ -117,15 +113,6 @@ X_train, X_test, y_train, y_test = train_test_split(
     stratify=y
 )
 
-# Handle class imbalance
-X_train_res, y_train_res = X_train, y_train
-
-# Scaling
-scaler = StandardScaler()
-X_train_scaled = scaler.fit_transform(X_train_res)
-X_test_scaled = scaler.transform(X_test)
-
-# Gradient Boosting Classifier
 model = GradientBoostingClassifier(
     n_estimators=200,
     learning_rate=0.05,
@@ -133,13 +120,18 @@ model = GradientBoostingClassifier(
     random_state=42
 )
 
-model.fit(X_train_scaled, y_train_res)
+model.fit(X_train, y_train)
 
-# Evaluation
-preds = model.predict(X_test_scaled)
+# ======================
+# EVALUATION (OPTION C)
+# ======================
+threshold = 0.37
+
+proba = model.predict_proba(X_test)[:, 1]
+preds = (proba >= threshold).astype(int)
+
 recall = recall_score(y_test, preds)
-
-st.info(f"Model Recall: {recall:.2f}")
+st.info(f"Model Recall (threshold={threshold}): {recall:.2f}")
 
 # ======================
 # CONFUSION MATRIX
@@ -155,7 +147,7 @@ st.dataframe(
 )
 
 # ======================
-# PREDICTION INPUT
+# PREDICTION INPUT (FIXED)
 # ======================
 st.subheader("🧪 Try Risk Prediction")
 
@@ -167,22 +159,45 @@ inventory = c3.number_input("Inventory", min_value=0)
 promo = st.selectbox("Promo Active?", [0, 1])
 staff = st.slider("Staff on Duty", 1, 20, 5)
 
+store_input = st.selectbox(
+    "Store ID",
+    sorted(df["store_id"].unique())
+)
+
+department_input = st.selectbox(
+    "Department",
+    sorted(df["department"].unique())
+)
+
 if st.button("Predict Risk"):
     input_df = pd.DataFrame([{
         "sales": sales,
         "returns": returns,
         "inventory": inventory,
         "promo": promo,
-        "staff_on_duty": staff
+        "staff_on_duty": staff,
+        "store_id": store_input,
+        "department": department_input
     }])
 
-    # samakan kolom dengan training
-    input_df = input_df.reindex(columns=X.columns, fill_value=0)
-    input_scaled = scaler.transform(input_df)
+    input_ohe = pd.get_dummies(
+        input_df[["store_id", "department"]],
+        prefix=["store_id", "department"]
+    )
 
-    pred = model.predict(input_scaled)[0]
+    input_final = pd.concat(
+        [input_df.drop(columns=["store_id", "department"]), input_ohe],
+        axis=1
+    )
 
-    if pred == 1:
-        st.error("🚨 HIGH SHRINKAGE RISK ( > 400 )")
+    input_final = input_final.reindex(
+        columns=X.columns,
+        fill_value=0
+    )
+
+    proba_input = model.predict_proba(input_final)[0, 1]
+
+    if proba_input >= threshold:
+        st.error(f"🚨 HIGH SHRINKAGE RISK (prob={proba_input:.2f})")
     else:
-        st.success("✅ LOW SHRINKAGE RISK ( ≤ 400 )")
+        st.success(f"✅ LOW SHRINKAGE RISK (prob={proba_input:.2f})")

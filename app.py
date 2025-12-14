@@ -2,9 +2,13 @@
 import streamlit as st
 import pandas as pd
 import matplotlib.pyplot as plt
+
 from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
 from sklearn.ensemble import GradientBoostingClassifier
-from sklearn.metrics import recall_score
+from sklearn.metrics import recall_score, confusion_matrix
+
+from imblearn.under_sampling import RandomUnderSampler
 
 st.set_page_config(
     page_title="Inventory Shrinkage Dashboard",
@@ -13,6 +17,9 @@ st.set_page_config(
 
 st.title("📦 Inventory Shrinkage Analytics & Risk Classification")
 
+# ======================
+# LOAD DATA
+# ======================
 @st.cache_data
 def load_data():
     return pd.read_csv("lp_shrinkage_project_data.csv")
@@ -21,14 +28,29 @@ df = load_data()
 df["date"] = pd.to_datetime(df["date"])
 
 # ======================
-# CREATE CLASS LABEL
+# PREPROCESSING
 # ======================
-threshold = df["shrinkage"].median()
-df["risk_label"] = (df["shrinkage"] > threshold).astype(int)
-# 0 = Low Risk, 1 = High Risk
+
+# 1️⃣ Create label (threshold = 400)
+df["High_Risk"] = (df["shrinkage"] > 400).astype(int)
+
+# 2️⃣ One-Hot Encoding categorical features
+cat_cols = ["store_id", "department"]
+df_ohe = pd.get_dummies(df[cat_cols], prefix=cat_cols)
+
+df_final = pd.concat(
+    [df.drop(columns=cat_cols), df_ohe],
+    axis=1
+)
+
+# 3️⃣ Feature & target split (sesuai notebook)
+X = df_final.drop(
+    columns=["shrinkage", "date", "High_Risk"]
+)
+y = df_final["High_Risk"]
 
 # ======================
-# SIDEBAR FILTER
+# SIDEBAR FILTER (EDA SAJA)
 # ======================
 st.sidebar.header("🔍 Filter Data")
 
@@ -55,8 +77,10 @@ st.subheader("📊 Key Metrics")
 
 col1, col2, col3, col4 = st.columns(4)
 col1.metric("Total Records", len(filtered_df))
-col2.metric("High Risk (%)",
-            f"{filtered_df['risk_label'].mean() * 100:.1f}%")
+col2.metric(
+    "High Risk (%)",
+    f"{filtered_df['High_Risk'].mean() * 100:.1f}%"
+)
 col3.metric("Total Sales", f"{filtered_df['sales'].sum():,}")
 col4.metric("Avg Inventory", f"{filtered_df['inventory'].mean():.0f}")
 
@@ -70,41 +94,68 @@ colA, colB = st.columns(2)
 with colA:
     fig, ax = plt.subplots()
     ax.hist(filtered_df["shrinkage"], bins=20)
+    ax.axvline(400, linestyle="--", label="Threshold 400")
+    ax.legend()
     ax.set_title("Shrinkage Distribution")
     st.pyplot(fig)
 
 with colB:
-    risk_by_dept = filtered_df.groupby("department")["risk_label"].mean()
+    risk_by_dept = filtered_df.groupby("department")["High_Risk"].mean()
     fig, ax = plt.subplots()
     risk_by_dept.plot(kind="bar", ax=ax)
     ax.set_title("High Risk Ratio by Department")
     st.pyplot(fig)
 
 # ======================
-# MODEL (CLASSIFICATION)
+# MODEL
 # ======================
 st.subheader("🤖 Shrinkage Risk Classification")
 
-features = ["sales", "returns", "inventory", "promo", "staff_on_duty"]
-X = df[features]
-y = df["risk_label"]
-
+# 4️⃣ Train-test split (test_size = 0.3)
 X_train, X_test, y_train, y_test = train_test_split(
-    X, y, test_size=0.2, random_state=42, stratify=y
+    X, y,
+    test_size=0.3,
+    random_state=42,
+    stratify=y
 )
 
+# 5️⃣ Handle class imbalance
+rus = RandomUnderSampler(random_state=42)
+X_train_res, y_train_res = rus.fit_resample(X_train, y_train)
+
+# 6️⃣ Scaling
+scaler = StandardScaler()
+X_train_scaled = scaler.fit_transform(X_train_res)
+X_test_scaled = scaler.transform(X_test)
+
+# 7️⃣ Gradient Boosting Classifier
 model = GradientBoostingClassifier(
-    n_estimators=100,
-    learning_rate=0.1,
+    n_estimators=200,
+    learning_rate=0.05,
+    max_depth=3,
     random_state=42
 )
 
-model.fit(X_train, y_train)
+model.fit(X_train_scaled, y_train_res)
 
-preds = model.predict(X_test)
+# 8️⃣ Evaluation
+preds = model.predict(X_test_scaled)
 recall = recall_score(y_test, preds)
 
 st.info(f"Model Recall: {recall:.2f}")
+
+# ======================
+# CONFUSION MATRIX
+# ======================
+cm = confusion_matrix(y_test, preds)
+st.write("Confusion Matrix")
+st.dataframe(
+    pd.DataFrame(
+        cm,
+        index=["Actual Low", "Actual High"],
+        columns=["Pred Low", "Pred High"]
+    )
+)
 
 # ======================
 # PREDICTION INPUT
@@ -120,9 +171,21 @@ promo = st.selectbox("Promo Active?", [0, 1])
 staff = st.slider("Staff on Duty", 1, 20, 5)
 
 if st.button("Predict Risk"):
-    pred = model.predict([[sales, returns, inventory, promo, staff]])[0]
+    input_df = pd.DataFrame([{
+        "sales": sales,
+        "returns": returns,
+        "inventory": inventory,
+        "promo": promo,
+        "staff_on_duty": staff
+    }])
+
+    # samakan kolom dengan training
+    input_df = input_df.reindex(columns=X.columns, fill_value=0)
+    input_scaled = scaler.transform(input_df)
+
+    pred = model.predict(input_scaled)[0]
 
     if pred == 1:
-        st.error("🚨 HIGH SHRINKAGE RISK")
+        st.error("🚨 HIGH SHRINKAGE RISK ( > 400 )")
     else:
-        st.success("✅ LOW SHRINKAGE RISK")
+        st.success("✅ LOW SHRINKAGE RISK ( ≤ 400 )")

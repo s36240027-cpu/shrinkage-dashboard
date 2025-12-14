@@ -7,9 +7,26 @@ from sklearn.model_selection import train_test_split
 from sklearn.ensemble import GradientBoostingClassifier
 from sklearn.metrics import recall_score, confusion_matrix
 
+# ======================
+# PAGE CONFIG
+# ======================
 st.set_page_config(
     page_title="Inventory Shrinkage Dashboard",
     layout="wide"
+)
+
+# ======================
+# HIDE SIDEBAR COMPLETELY
+# ======================
+st.markdown(
+    """
+    <style>
+        [data-testid="stSidebar"] {
+            display: none;
+        }
+    </style>
+    """,
+    unsafe_allow_html=True
 )
 
 st.title("📦 Inventory Shrinkage Analytics & Risk Classification")
@@ -25,7 +42,7 @@ df = load_data()
 df["date"] = pd.to_datetime(df["date"])
 
 # ======================
-# PREPROCESSING (MATCH NOTEBOOK)
+# PREPROCESSING
 # ======================
 
 # Create label (fixed threshold)
@@ -45,39 +62,15 @@ X = df_final.drop(columns=["shrinkage", "date", "High_Risk"])
 y = df_final["High_Risk"]
 
 # ======================
-# SIDEBAR FILTER (EDA ONLY)
-# ======================
-st.sidebar.header("🔍 Filter Data")
-
-store = st.sidebar.selectbox(
-    "Select Store",
-    ["All"] + sorted(df["store_id"].unique())
-)
-
-department = st.sidebar.selectbox(
-    "Select Department",
-    ["All"] + sorted(df["department"].unique())
-)
-
-filtered_df = df.copy()
-if store != "All":
-    filtered_df = filtered_df[filtered_df["store_id"] == store]
-if department != "All":
-    filtered_df = filtered_df[filtered_df["department"] == department]
-
-# ======================
 # KPI
 # ======================
 st.subheader("📊 Key Metrics")
 
 col1, col2, col3, col4 = st.columns(4)
-col1.metric("Total Records", len(filtered_df))
-col2.metric(
-    "High Risk (%)",
-    f"{filtered_df['High_Risk'].mean() * 100:.1f}%"
-)
-col3.metric("Total Sales", f"{filtered_df['sales'].sum():,}")
-col4.metric("Avg Inventory", f"{filtered_df['inventory'].mean():.0f}")
+col1.metric("Total Records", len(df))
+col2.metric("High Risk (%)", f"{df['High_Risk'].mean() * 100:.1f}%")
+col3.metric("Total Sales", f"{df['sales'].sum():,}")
+col4.metric("Avg Inventory", f"{df['inventory'].mean():.0f}")
 
 # ======================
 # VISUALIZATION
@@ -88,21 +81,21 @@ colA, colB = st.columns(2)
 
 with colA:
     fig, ax = plt.subplots()
-    ax.hist(filtered_df["shrinkage"], bins=20)
+    ax.hist(df["shrinkage"], bins=20)
     ax.axvline(400, linestyle="--", label="Threshold 400")
     ax.legend()
     ax.set_title("Shrinkage Distribution")
     st.pyplot(fig)
 
 with colB:
-    risk_by_dept = filtered_df.groupby("department")["High_Risk"].mean()
+    risk_by_dept = df.groupby("department")["High_Risk"].mean()
     fig, ax = plt.subplots()
     risk_by_dept.plot(kind="bar", ax=ax)
     ax.set_title("High Risk Ratio by Department")
     st.pyplot(fig)
 
 # ======================
-# MODEL (NO SCALING – CORRECT)
+# MODEL
 # ======================
 st.subheader("🤖 Shrinkage Risk Classification")
 
@@ -123,7 +116,7 @@ model = GradientBoostingClassifier(
 model.fit(X_train, y_train)
 
 # ======================
-# EVALUATION (OPTION C)
+# EVALUATION
 # ======================
 threshold = 0.37
 
@@ -147,7 +140,7 @@ st.dataframe(
 )
 
 # ======================
-# PREDICTION INPUT (FIXED)
+# PREDICTION INPUT
 # ======================
 st.subheader("🧪 Try Risk Prediction")
 

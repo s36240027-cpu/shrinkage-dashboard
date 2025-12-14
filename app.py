@@ -135,7 +135,7 @@ model.fit(X_train_scaled, y_train)
 # ======================
 # EVALUATION
 # ======================
-threshold = 0.35
+threshold = 0.36
 
 proba = model.predict_proba(X_test_scaled)[:, 1]
 preds = (proba >= threshold).astype(int)

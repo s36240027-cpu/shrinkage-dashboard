@@ -41,14 +41,14 @@ df_final = pd.concat(
     axis=1
 )
 
-# Feature & target split (sesuai notebook)
+# Feature & target split
 X = df_final.drop(
     columns=["shrinkage", "date", "High_Risk"]
 )
 y = df_final["High_Risk"]
 
 # ======================
-# SIDEBAR FILTER (EDA SAJA)
+# SIDEBAR FILTER (EDA ONLY)
 # ======================
 st.sidebar.header("🔍 Filter Data")
 
@@ -109,7 +109,7 @@ with colB:
 # ======================
 st.subheader("🤖 Shrinkage Risk Classification")
 
-# Train-test split (test_size = 0.3)
+# Train-test split
 X_train, X_test, y_train, y_test = train_test_split(
     X, y,
     test_size=0.3,
@@ -117,12 +117,9 @@ X_train, X_test, y_train, y_test = train_test_split(
     stratify=y
 )
 
-# Handle class imbalance
-X_train_res, y_train_res = X_train, y_train
-
 # Scaling
 scaler = StandardScaler()
-X_train_scaled = scaler.fit_transform(X_train_res)
+X_train_scaled = scaler.fit_transform(X_train)
 X_test_scaled = scaler.transform(X_test)
 
 # Gradient Boosting Classifier
@@ -133,13 +130,18 @@ model = GradientBoostingClassifier(
     random_state=42
 )
 
-model.fit(X_train_scaled, y_train_res)
+model.fit(X_train_scaled, y_train)
 
-# Evaluation
-preds = model.predict(X_test_scaled)
+# ======================
+# EVALUATION (OPTION C)
+# ======================
+threshold = 0.3
+
+proba = model.predict_proba(X_test_scaled)[:, 1]
+preds = (proba >= threshold).astype(int)
+
 recall = recall_score(y_test, preds)
-
-st.info(f"Model Recall: {recall:.2f}")
+st.info(f"Model Recall (threshold={threshold}): {recall:.2f}")
 
 # ======================
 # CONFUSION MATRIX
@@ -176,13 +178,12 @@ if st.button("Predict Risk"):
         "staff_on_duty": staff
     }])
 
-    # samakan kolom dengan training
     input_df = input_df.reindex(columns=X.columns, fill_value=0)
     input_scaled = scaler.transform(input_df)
 
-    pred = model.predict(input_scaled)[0]
+    proba_input = model.predict_proba(input_scaled)[0, 1]
 
-    if pred == 1:
-        st.error("🚨 HIGH SHRINKAGE RISK ( > 400 )")
+    if proba_input >= threshold:
+        st.error(f"🚨 HIGH SHRINKAGE RISK (prob={proba_input:.2f})")
     else:
-        st.success("✅ LOW SHRINKAGE RISK ( ≤ 400 )")
+        st.success(f"✅ LOW SHRINKAGE RISK (prob={proba_input:.2f})")

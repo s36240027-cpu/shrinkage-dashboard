@@ -8,8 +8,6 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.ensemble import GradientBoostingClassifier
 from sklearn.metrics import recall_score, confusion_matrix
 
-from imblearn.under_sampling import RandomUnderSampler
-
 st.set_page_config(
     page_title="Inventory Shrinkage Dashboard",
     layout="wide"
@@ -31,10 +29,10 @@ df["date"] = pd.to_datetime(df["date"])
 # PREPROCESSING
 # ======================
 
-# 1️⃣ Create label (threshold = 400)
+# Create label (threshold = 400)
 df["High_Risk"] = (df["shrinkage"] > 400).astype(int)
 
-# 2️⃣ One-Hot Encoding categorical features
+# One-Hot Encoding categorical features
 cat_cols = ["store_id", "department"]
 df_ohe = pd.get_dummies(df[cat_cols], prefix=cat_cols)
 
@@ -43,7 +41,7 @@ df_final = pd.concat(
     axis=1
 )
 
-# 3️⃣ Feature & target split (sesuai notebook)
+# Feature & target split (sesuai notebook)
 X = df_final.drop(
     columns=["shrinkage", "date", "High_Risk"]
 )
@@ -111,7 +109,7 @@ with colB:
 # ======================
 st.subheader("🤖 Shrinkage Risk Classification")
 
-# 4️⃣ Train-test split (test_size = 0.3)
+# Train-test split (test_size = 0.3)
 X_train, X_test, y_train, y_test = train_test_split(
     X, y,
     test_size=0.3,
@@ -119,16 +117,15 @@ X_train, X_test, y_train, y_test = train_test_split(
     stratify=y
 )
 
-# 5️⃣ Handle class imbalance
-rus = RandomUnderSampler(random_state=42)
-X_train_res, y_train_res = rus.fit_resample(X_train, y_train)
+# Handle class imbalance
+X_train_res, y_train_res = X_train, y_train
 
-# 6️⃣ Scaling
+# Scaling
 scaler = StandardScaler()
 X_train_scaled = scaler.fit_transform(X_train_res)
 X_test_scaled = scaler.transform(X_test)
 
-# 7️⃣ Gradient Boosting Classifier
+# Gradient Boosting Classifier
 model = GradientBoostingClassifier(
     n_estimators=200,
     learning_rate=0.05,
@@ -138,7 +135,7 @@ model = GradientBoostingClassifier(
 
 model.fit(X_train_scaled, y_train_res)
 
-# 8️⃣ Evaluation
+# Evaluation
 preds = model.predict(X_test_scaled)
 recall = recall_score(y_test, preds)
 
